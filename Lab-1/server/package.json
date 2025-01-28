@@ -1,0 +1,16 @@
+{
+  "name": "sst-ecommerce",
+  "version": "1.0.0",
+  "description": "SST-based SaaS eCommerce project",
+  "main": "index.js",
+  "dependencies": {
+    "dotenv": "^16.4.7",
+    "mongoose": "^6.0.0",
+    "sst": "^2.0.0"
+  },
+  "scripts": {
+    "dev": "sst dev --stage lavpreet-saas-dev",
+    "deploy": "sst deploy --stage lavpreetsandhu",
+    "remove": "sst remove"
+  }
+}
