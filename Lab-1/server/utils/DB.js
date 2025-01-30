@@ -1,8 +1,8 @@
 import * as mongoose from 'mongoose';
 
 let isConnected;
-let escapedDBString: any;
-let db: any;
+let escapedDBString;
+let db;
 
 export const DB = async () => {
   try {

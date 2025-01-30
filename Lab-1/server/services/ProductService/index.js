@@ -9,6 +9,7 @@ const productSchema = new mongoose.Schema({
     description: String,
     stock: Number,
     category: String,
+    sku:String
 });
 export const Product = mongoose.model('Product', productSchema);
 
