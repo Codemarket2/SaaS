@@ -24,7 +24,7 @@ export function MyStack({stack}) {
   // const {stack}=app
   setMaxListeners(20);
 
-  // ✅ Lambda Layer (Equivalent to ServerlessSaaSLayers)
+  // Lambda Layer (Equivalent to ServerlessSaaSLayers)
   // const serverlessSaaSLayers = new sst.Function(stack, "ServerlessSaaSLayers", { // todo
   //   handler: "layers",
   //   runtime: "nodejs16.x",
@@ -33,7 +33,7 @@ export function MyStack({stack}) {
   //   // nodeModules: ["aws-sdk","winston"], /// todo
   // });
 
-  // ✅ IAM Roles (Converted from AWS::IAM::Role)
+  // IAM Roles (Converted from AWS::IAM::Role)
   // const authorizerExecutionRole = new iam.Role(stack, "AuthorizerExecutionRole", { // todo
   //   assumedBy: new iam.ServicePrincipal("lambda.amazonaws.com"),
   //   managedPolicies: [
@@ -53,7 +53,7 @@ export function MyStack({stack}) {
   //   },
   // });
 
-  // ✅ Shared Services Authorizer Function //todo
+  // Shared Services Authorizer Function //todo
   // const sharedServicesAuthorizerFunction = new sst.Function(stack, "SharedServicesAuthorizerFunction", {
   //   handler: "functions/shared_service_authorizer.main",
   //   runtime: "nodejs16.x",
@@ -69,7 +69,7 @@ export function MyStack({stack}) {
   //   // layers: [serverlessSaaSLayers], //todo
   // });
 
-  // ✅ Define ALL Lambda Functions
+  // Define ALL Lambda Functions
   const lambdaConfigs = [
     { name: "CreateTenantFunction", handler:"services/TenantManagementService/index.createTenant"},
     { name: "GetTenantFunction", handler: "functions/getTenant.main" },
@@ -106,7 +106,7 @@ export function MyStack({stack}) {
   // const fun= 
 
 
-  // ✅ Cognito User Pool & Client
+  // Cognito User Pool & Client
 //   const auth = new sst.Auth(stack, "CognitoAuth", {
 //     cognito: true,
 //     userPool: {

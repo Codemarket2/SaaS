@@ -2,7 +2,7 @@ import mongoose from "mongoose";
 import { v4 as uuidv4 } from "uuid";
 import axios from "axios";
 import logger from "../../layers/nodejs/logger";
-import utils from "../../layers/nodejs/utils";
+import {createErrorResponse,createSuccessResponse} from "../../layers/nodejs/utils";
 import {TenantDetails,TenantUserMapping} from '../../models'
 
 
@@ -24,19 +24,15 @@ export async function registerTenant(event) {
 
     const stageName = event.requestContext.stage;
     const host = event.headers.Host;
-    // const auth = utils.getAuth(host);
-    // const headers = utils.getHeaders(event);
-
+    // const auth = utils.getAuth(host); // todo
+    // const headers = utils.getHeaders(event); // todo
     const createUserResponse = await createTenantAdminUser(tenantDetails, headers, auth, host, stageName);
     logger.info(createUserResponse);
     tenantDetails.tenantAdminUserName = createUserResponse.message.tenantAdminUserName;
-
     const createTenantResponse = await createTenant(tenantDetails, headers, auth, host, stageName);
     logger.info(createTenantResponse);
-
     await TenantDetails.create(tenantDetails);
-
-    return utils.createSuccessResponse("You have been registered in our system");
+    return createSuccessResponse("You have been registered in our system");
   } catch (error) {
     logger.error("Error registering a new tenant", error);
     throw new Error("Error registering a new tenant");

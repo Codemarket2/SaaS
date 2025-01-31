@@ -20,3 +20,5 @@ export function info(logMessage) {
 export function error(logMessage) {
   logger.error(logMessage);
 }
+
+export default {info,error}

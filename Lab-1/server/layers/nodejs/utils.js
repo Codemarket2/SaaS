@@ -1,8 +1,8 @@
 import AWS from "aws-sdk";
 import { defaultProvider } from "@aws-sdk/credential-provider-node";
 import { SignatureV4 } from "@aws-sdk/signature-v4";
-import { HttpRequest } from "@aws-sdk/protocol-http";
-import { APIGatewayProxyEvent, APIGatewayProxyResult } from "aws-lambda";
+// import { HttpRequest } from "@aws-sdk/protocol-http";
+// import { APIGatewayProxyEvent, APIGatewayProxyResult } from "aws-lambda";
 
 const corsHeaders = {
   "Content-Type": "application/json",
