@@ -1,16 +1,22 @@
-import {Tenant} from '../../models/tenantModel'
-import { logger, generateResponse, createSuccessResponse, DB } from "../../utils";
+import { Tenant } from "../../models/tenantModel";
+import {
+  logger,
+  generateResponse,
+  createSuccessResponse,
+  DB,
+} from "../../utils";
 
 export async function createTenant(event) {
   try {
-    await DB()
+    await DB();
     const tenantDetails = JSON.parse(event.body);
-    const newTenant=new Tenant({...tenantDetails});
+    const newTenant = new Tenant({ ...tenantDetails });
     await newTenant.save();
     return createSuccessResponse("Tenant Created");
   } catch (error) {
+    console.log("error", error);
     logger.error("Error creating a new tenant", error);
-    throw new Error("Error creating a new tenant",error);
+    throw new Error("Error creating a new tenant", error);
   }
 }
 

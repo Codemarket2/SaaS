@@ -1,6 +1,14 @@
 import AWS from "aws-sdk";
-import { defaultProvider } from "@aws-sdk/credential-provider-node";
-import { SignatureV4 } from "@aws-sdk/signature-v4";
+import crypto from "crypto";
+
+// Helper function to create HMAC
+const sign = (key, msg) => crypto.createHmac('sha256', key).update(msg).digest();
+
+// Helper function to create Hex signature
+const signature = (key, msg) => crypto.createHmac('sha256', key).update(msg).digest('hex');
+
+// import { defaultProvider } from "@aws-sdk/credential-provider-node";
+// import { SignatureV4 } from "@aws-sdk/signature-v4";
 // import { HttpRequest } from "@aws-sdk/protocol-http";
 // import { APIGatewayProxyEvent, APIGatewayProxyResult } from "aws-lambda";
 
@@ -32,18 +40,70 @@ export const encodeToJsonObject = (inputObject) => {
     typeof value === "bigint" ? value.toString() : value
   );
 };
-export const getAuth = async (hos, region) => {
-  const credentials = await defaultProvider()();
 
-  const signer = new SignatureV4({
-    credentials,
-    region,
-    service: "execute-api",
-    sha256: AWS.util.crypto.sha256,
-  });
+
+
+// Function to get AWS authorization headers
+export const getAuth = async (host, region) => {
+  const credentials = await new AWS.CredentialProviderChain().resolvePromise();
 
   return async (request) => {
-    return signer.sign(request);
+    const method = request.method || 'GET';
+    const service = 'execute-api';
+    const canonicalUri = request.path || '/';
+    const canonicalQueryString = '';
+    const contentType = request.headers["Content-Type"] || 'application/json';
+    const currentDate = new Date().toISOString().replace(/[:-]|\.\d{3}/g, '');
+    const dateStamp = currentDate.substring(0, 8);
+
+    // Step 1: Create canonical headers and signed headers
+    const canonicalHeaders = `content-type:${contentType}\nhost:${host}\nx-amz-date:${currentDate}\n`;
+    const signedHeaders = 'content-type;host;x-amz-date';
+
+    // Step 2: Create payload hash
+    const payloadHash = crypto.createHash('sha256').update(request.body || '').digest('hex');
+
+    // Step 3: Create canonical request
+    const canonicalRequest = [
+      method,
+      canonicalUri,
+      canonicalQueryString,
+      canonicalHeaders,
+      signedHeaders,
+      payloadHash,
+    ].join('\n');
+
+    // Step 4: Create string to sign
+    const algorithm = 'AWS4-HMAC-SHA256';
+    const credentialScope = `${dateStamp}/${region}/${service}/aws4_request`;
+    const stringToSign = [
+      algorithm,
+      currentDate,
+      credentialScope,
+      crypto.createHash('sha256').update(canonicalRequest).digest('hex'),
+    ].join('\n');
+
+    // Step 5: Calculate the signature
+    const kDate = sign(`AWS4${credentials.secretAccessKey}`, dateStamp);
+    const kRegion = sign(kDate, region);
+    const kService = sign(kRegion, service);
+    const kSigning = sign(kService, 'aws4_request');
+    const finalSignature = signature(kSigning, stringToSign);
+
+    // Step 6: Create authorization header
+    const authorizationHeader = `${algorithm} Credential=${credentials.accessKeyId}/${credentialScope}, SignedHeaders=${signedHeaders}, Signature=${finalSignature}`;
+
+    // Return signed request
+    return {
+      ...request,
+      headers: {
+        ...request.headers,
+        'x-amz-date': currentDate,
+        'Authorization': authorizationHeader,
+        'Content-Type': contentType,
+        'Host': host,
+      },
+    };
   };
 };
 

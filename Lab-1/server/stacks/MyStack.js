@@ -71,24 +71,25 @@ export function MyStack({stack}) {
 
   // Define ALL Lambda Functions
   const lambdaConfigs = [
-    { name: "CreateTenantFunction", handler:"services/TenantManagementService/index.createTenant"},
-    { name: "GetTenantFunction", handler: "functions/getTenant.main" },
-    { name: "UpdateTenantFunction", handler: "functions/updateTenant.main" },
-    { name: "DeactivateTenantFunction", handler: "functions/deactivateTenant.main" },
-    { name: "ActivateTenantFunction", handler: "functions/activateTenant.main" },
-    { name: "CreateUserFunction", handler: "functions/createUser.main" },
-    { name: "DisableUserFunction", handler: "functions/disableUser.main" },
-    { name: "EnableUsersByTenantFunction", handler: "functions/enableUsersByTenant.main" },
-    { name: "DisableUsersByTenantFunction", handler: "functions/disableUsersByTenant.main" },
-    { name: "RegisterTenantFunction", handler: "functions/registerTenant.main" },
-    { name: "GetUsersFunction", handler: "functions/getUsers.main" },
-    { name: "GetUserFunction", handler: "functions/getUser.main" },
-    { name: "CreateTenantAdminUserFunction", handler: "functions/createTenantAdminUser.main" },
+    { name: "CreateTenantFunction", handler:"services/TenantManagementService/tenant-management.createTenant"},
+    { name: "GetTenantFunction", handler: "services/TenantManagementService/tenant-management.getTenant" },
+    { name: "UpdateTenantFunction", handler: "services/TenantManagementService/tenant-management.updateTenant" },
+    { name: "DeactivateTenantFunction", handler: "services/TenantManagementService/tenant-management.deactivateTenant" },
+    { name: "ActivateTenantFunction", handler: "services/TenantManagementService/tenant-management.activateTenant" },
+
+    { name: "CreateUserFunction", handler: "services/TenantManagementService/user-management.createUser" },
+    { name: "DisableUserFunction", handler: "services/TenantManagementService/user-management.disableUser" },
+    { name: "EnableUsersByTenantFunction", handler: "services/TenantManagementService/user-management.enableUsersByTenant" },
+    { name: "DisableUsersByTenantFunction", handler: "services/TenantManagementService/user-management.disableUsersByTenant" },
+    { name: "GetUsersFunction", handler: "services/TenantManagementService/user-management.getUsers" },
+    { name: "GetUserFunction", handler: "services/TenantManagementService/user-management.getUser" },
+    { name: "CreateTenantAdminUserFunction", handler: "services/TenantManagementService/user-management.createTenantAdminUser" },
+
+    { name: "RegisterTenantFunction", handler: "services/TenantManagementService/tenant-management.registerTenant" }
   ];
 
   const lambdaFunctions = {};
   lambdaConfigs.forEach(({ name, handler }) => {
-    // console.log("handler",handler)
     lambdaFunctions[name] = new Function(stack, name, {
       handler,
       runtime: "nodejs16.x",
@@ -102,9 +103,6 @@ export function MyStack({stack}) {
       // layers: [serverlessSaaSLayers], //todo
     });
   });
-
-  // const fun= 
-
 
   // Cognito User Pool & Client
 //   const auth = new sst.Auth(stack, "CognitoAuth", {
@@ -140,24 +138,23 @@ export function MyStack({stack}) {
     // },
     routes: {
       "POST /tenant": lambdaFunctions.CreateTenantFunction,
-      // "GET /tenant/{tenantId}": lambdaFunctions.GetTenantFunction,
-      // "PUT /tenant/{tenantId}": lambdaFunctions.UpdateTenantFunction,
-      // "DELETE /tenant/{tenantId}": lambdaFunctions.DeactivateTenantFunction,
-      // "POST /tenant/activate": lambdaFunctions.ActivateTenantFunction,
-      // "POST /user": lambdaFunctions.CreateUserFunction,
-      // "POST /user/disable": lambdaFunctions.DisableUserFunction,
-      // "POST /users/enable": lambdaFunctions.EnableUsersByTenantFunction,
-      // "POST /users/disable": lambdaFunctions.DisableUsersByTenantFunction,
-      // "POST /register": lambdaFunctions.RegisterTenantFunction,
-      // "GET /users": lambdaFunctions.GetUsersFunction,
-      // "GET /user/{userId}": lambdaFunctions.GetUserFunction,
-      // "POST /user/admin": lambdaFunctions.CreateTenantAdminUserFunction,
+      "GET /tenant/{tenantId}": lambdaFunctions.GetTenantFunction,
+      "PUT /tenant/{tenantId}": lambdaFunctions.UpdateTenantFunction,
+      "DELETE /tenant/{tenantId}": lambdaFunctions.DeactivateTenantFunction,
+      "POST /tenant/activate": lambdaFunctions.ActivateTenantFunction,
+      "POST /user": lambdaFunctions.CreateUserFunction,
+      "POST /user/disable": lambdaFunctions.DisableUserFunction,
+      "POST /users/enable": lambdaFunctions.EnableUsersByTenantFunction,
+      "POST /users/disable": lambdaFunctions.DisableUsersByTenantFunction,
+      "POST /register": lambdaFunctions.RegisterTenantFunction,
+      "GET /users": lambdaFunctions.GetUsersFunction,
+      "GET /user/{userId}": lambdaFunctions.GetUserFunction,
+      "POST /user/admin": lambdaFunctions.CreateTenantAdminUserFunction,
 
-      // "GET /products": "services/TenantManagementService/tenant-management.createTenant",
-      // "GET /products": "services/ProductService/index.handler",
-      // "POST /products": "services/ProductService/index.handler",
-      // "GET /orders": "services/OrderService/index.handler",
-      // "POST /orders": "services/OrderService/index.handler",
+      "GET /products": "services/ProductService/index.handler",
+      "POST /products": "services/ProductService/index.handler",
+      "GET /orders": "services/OrderService/index.handler",
+      "POST /orders": "services/OrderService/index.handler",
     },
   });
 
@@ -166,18 +163,18 @@ export function MyStack({stack}) {
   stack.addOutputs({
     ApiEndpoint: api.url,
     CreateTenantFunctionArn:lambdaFunctions.CreateTenantFunction.functionArn,
-    // GetTenantFunctionArn: lambdaFunctions.GetTenantFunction.functionArn,
-    // UpdateTenantFunctionArn: lambdaFunctions.UpdateTenantFunction.functionArn,
-    // DeactivateTenantFunctionArn: lambdaFunctions.DeactivateTenantFunction.functionArn,
-    // ActivateTenantFunctionArn: lambdaFunctions.ActivateTenantFunction.functionArn,
-    // CreateUserFunctionArn: lambdaFunctions.CreateUserFunction.functionArn,
-    // DisableUserFunctionArn: lambdaFunctions.DisableUserFunction.functionArn,
-    // EnableUsersByTenantFunctionArn: lambdaFunctions.EnableUsersByTenantFunction.functionArn,
-    // DisableUsersByTenantFunctionArn: lambdaFunctions.DisableUsersByTenantFunction.functionArn,
-    // RegisterTenantFunctionArn: lambdaFunctions.RegisterTenantFunction.functionArn,
-    // GetUsersFunctionArn: lambdaFunctions.GetUsersFunction.functionArn,
-    // GetUserFunctionArn: lambdaFunctions.GetUserFunction.functionArn,
-    // CreateTenantAdminUserFunctionArn: lambdaFunctions.CreateTenantAdminUserFunction.functionArn,
+    GetTenantFunctionArn: lambdaFunctions.GetTenantFunction.functionArn,
+    UpdateTenantFunctionArn: lambdaFunctions.UpdateTenantFunction.functionArn,
+    DeactivateTenantFunctionArn: lambdaFunctions.DeactivateTenantFunction.functionArn,
+    ActivateTenantFunctionArn: lambdaFunctions.ActivateTenantFunction.functionArn,
+    CreateUserFunctionArn: lambdaFunctions.CreateUserFunction.functionArn,
+    DisableUserFunctionArn: lambdaFunctions.DisableUserFunction.functionArn,
+    EnableUsersByTenantFunctionArn: lambdaFunctions.EnableUsersByTenantFunction.functionArn,
+    DisableUsersByTenantFunctionArn: lambdaFunctions.DisableUsersByTenantFunction.functionArn,
+    RegisterTenantFunctionArn: lambdaFunctions.RegisterTenantFunction.functionArn,
+    GetUsersFunctionArn: lambdaFunctions.GetUsersFunction.functionArn,
+    GetUserFunctionArn: lambdaFunctions.GetUserFunction.functionArn,
+    CreateTenantAdminUserFunctionArn: lambdaFunctions.CreateTenantAdminUserFunction.functionArn,
     // CognitoAdminUserGroupName:CognitoAddUserToGroup1.groupName
       //   // ApiEndpoint: api.url,
   //   // CognitoUserPoolId: auth.cognitoUserPoolId,

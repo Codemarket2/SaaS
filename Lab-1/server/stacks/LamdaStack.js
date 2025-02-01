@@ -39,7 +39,7 @@ export default function LambdaStack({stack}) {
     runtime: "nodejs18.x",
     timeout: 29,
     memorySize: 256,
-    // permissions: [authorizerExecutionRole], // todo
+    permissions: [authorizerExecutionRole], // todo
     permissions:['*'],
     environment: {
       MONGO_URI,
@@ -121,7 +121,7 @@ export default function LambdaStack({stack}) {
     // ApiEndpoint: api.url,
     // CognitoUserPoolId: auth.cognitoUserPoolId,
     // CognitoUserPoolClientId: auth.cognitoUserPoolClientId,
-    // SharedServicesAuthorizerFunctionArn: sharedServicesAuthorizerFunction.functionArn,
+    SharedServicesAuthorizerFunctionArn: sharedServicesAuthorizerFunction.functionArn,
     CreateTenantFunctionArn: lambdaFunctions.CreateTenantFunction.functionArn,
     GetTenantFunctionArn: lambdaFunctions.GetTenantFunction.functionArn,
     UpdateTenantFunctionArn: lambdaFunctions.UpdateTenantFunction.functionArn,

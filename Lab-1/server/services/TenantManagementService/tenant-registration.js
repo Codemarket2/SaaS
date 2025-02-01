@@ -2,7 +2,7 @@ import mongoose from "mongoose";
 import { v4 as uuidv4 } from "uuid";
 import axios from "axios";
 import logger from "../../layers/nodejs/logger";
-import {createErrorResponse,createSuccessResponse} from "../../layers/nodejs/utils";
+import {createErrorResponse,createSuccessResponse,getAuth, getHeaders} from "../../layers/nodejs/utils";
 import {TenantDetails,TenantUserMapping} from '../../models'
 
 
@@ -19,13 +19,11 @@ export async function registerTenant(event) {
     const tenantId = uuidv4();
     const tenantDetails = JSON.parse(event.body);
     tenantDetails.tenantId = tenantId;
-
     logger.info(tenantDetails);
-
     const stageName = event.requestContext.stage;
     const host = event.headers.Host;
-    // const auth = utils.getAuth(host); // todo
-    // const headers = utils.getHeaders(event); // todo
+    const auth = getAuth(host,process.env.REGION); // todo (check about the region)
+    const headers = getHeaders(event); // todo
     const createUserResponse = await createTenantAdminUser(tenantDetails, headers, auth, host, stageName);
     logger.info(createUserResponse);
     tenantDetails.tenantAdminUserName = createUserResponse.message.tenantAdminUserName;
