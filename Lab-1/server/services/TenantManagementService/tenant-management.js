@@ -22,6 +22,7 @@ export async function createTenant(event) {
 
 export async function getTenants(event) {
   try {
+    await DB();
     const tenants = await Tenant.find();
     return generateResponse(tenants);
   } catch (error) {

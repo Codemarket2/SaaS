@@ -1,8 +1,14 @@
 import "dotenv/config";
-import { Api, 
+import {
+  Api,
   // Cognito,StackContext,
-  Function } from "sst/constructs";
+  Function,
+} from "sst/constructs";
 import { setMaxListeners } from "events";
+import * as apigateway from "aws-cdk-lib/aws-apigateway";
+// import * as iam from "aws-cdk-lib/aws-iam";
+// import * as aws_cdk from "aws-cdk-lib";
+
 // import {
 //   StringAttribute,
 //   OAuthScope,
@@ -15,12 +21,12 @@ import { setMaxListeners } from "events";
 //   VerificationEmailStyle
 // } from "aws-cdk-lib/aws-cognito";
 // import * as ssm from "aws-cdk-lib/aws-ssm";
-import {CongitoStack } from './CognitoStack'
+import { CongitoStack } from "./CognitoStack";
 // import * as sst from "@serverless-stack/resources";
 // import * as iam from "aws-cdk-lib/aws-iam";
-// import {activateTenant,createTenant,createTenantAdminUser,deactivateTenant,getTenant,getTenants,registerTenant,updateTenant} from '../services/TenantManagementService'
+// import {activateTenant,createTenant,createTenantAdminUser,deactivateTenant,getTenant,getTenants,registerTenant,updateTenant} from '../services/tenantManagementService'
 
-export function MyStack({stack}) {
+export function MyStack({ stack }) {
   // const {stack}=app
   setMaxListeners(20);
 
@@ -68,65 +74,359 @@ export function MyStack({stack}) {
   //   },
   //   // layers: [serverlessSaaSLayers], //todo
   // });
+  const Congito = CongitoStack({ stack });
 
-  // Define ALL Lambda Functions
-  const lambdaConfigs = [
-    { name: "CreateTenantFunction", handler:"services/TenantManagementService/tenant-management.createTenant"},
-    { name: "GetTenantFunction", handler: "services/TenantManagementService/tenant-management.getTenant" },
-    { name: "UpdateTenantFunction", handler: "services/TenantManagementService/tenant-management.updateTenant" },
-    { name: "DeactivateTenantFunction", handler: "services/TenantManagementService/tenant-management.deactivateTenant" },
-    { name: "ActivateTenantFunction", handler: "services/TenantManagementService/tenant-management.activateTenant" },
+  const defaultEnv = {
+    MONGO_URI: process.env.MONGO_URI,
+    REGION: process.env.REGION,
+    TENANT_USER_POOL: Congito.CognitoUserPool.userPoolId,
+    TENANT_APP_CLIENT: Congito.CognitoUserPool.userPoolClientId,
+    OPERATION_USERS_USER_POOL: Congito.CognitoOperationUsersUserPool.userPoolId,
+    OPERATION_USERS_APP_CLIENT:
+      Congito.CognitoOperationUsersUserPool.userPoolClientId,
+    // POWERTOOLS_SERVICE_NAME: "UserManagement.CreateTenantAdmin", need to check
+  };
 
-    { name: "CreateUserFunction", handler: "services/TenantManagementService/user-management.createUser" },
-    { name: "DisableUserFunction", handler: "services/TenantManagementService/user-management.disableUser" },
-    { name: "EnableUsersByTenantFunction", handler: "services/TenantManagementService/user-management.enableUsersByTenant" },
-    { name: "DisableUsersByTenantFunction", handler: "services/TenantManagementService/user-management.disableUsersByTenant" },
-    { name: "GetUsersFunction", handler: "services/TenantManagementService/user-management.getUsers" },
-    { name: "GetUserFunction", handler: "services/TenantManagementService/user-management.getUser" },
-    { name: "CreateTenantAdminUserFunction", handler: "services/TenantManagementService/user-management.createTenantAdminUser" },
+  const CreateTenantFunction = new Function(stack, "CreateTenantFunction", {
+    handler: "services/tenantManagementService/tenant-management.createTenant",
+    runtime: "nodejs16.x",
+    timeout: 200,
+    memorySize: 1024,
+    environment: {
+      MONGO_URI: process.env.MONGO_URI,
+      CREATE_TENANT_ADMIN_USER_RESOURCE_PATH: "user/tenant-admin",
+      CREATE_TENANT_RESOURCE_PATH: "tenant",
+      PROVISION_TENANT_RESOURCE_PATH: "provisioning",
+      POWERTOOLS_SERVICE_NAME: "TenantRegistration.RegisterTenant",
+      REGION: process.env.REGION,
+      TENANT_USER_POOL: Congito.CognitoUserPool.userPoolId,
+      TENANT_APP_CLIENT: Congito.CognitoUserPool.userPoolClientId,
+      OPERATION_USERS_USER_POOL:
+        Congito.CognitoOperationUsersUserPool.userPoolId,
+      OPERATION_USERS_APP_CLIENT:
+        Congito.CognitoOperationUsersUserPool.userPoolClientId,
+      // POWERTOOLS_SERVICE_NAME: "UserManagement.CreateTenantAdmin", need to check
+    },
+  });
+  CreateTenantFunction.attachPermissions([
+    "cognito-idp:CreateGroup", //permission
+    "cognito-idp:AdminCreateUser", //for
+    "cognito-idp:AdminAddUserToGroup", //createTenantAdminUser
+  ]);
 
-    { name: "RegisterTenantFunction", handler: "services/TenantManagementService/tenant-management.registerTenant" }
-  ];
+  const GetTenantsFunction = new Function(stack, "GetTenantsFunction", {
+    handler: "services/tenantManagementService/tenant-management.getTenants",
+    runtime: "nodejs16.x",
+    timeout: 30,
+    memorySize: 512,
+    environment: {
+      ...defaultEnv,
+    },
+  });
 
-  const lambdaFunctions = {};
-  lambdaConfigs.forEach(({ name, handler }) => {
-    lambdaFunctions[name] = new Function(stack, name, {
-      handler,
+  const GetTenantFunction = new Function(stack, "GetTenantFunction", {
+    handler: "services/tenantManagementService/tenant-management.getTenant",
+    runtime: "nodejs16.x",
+    timeout: 30,
+    memorySize: 512,
+    environment: {
+      ...defaultEnv,
+    },
+  });
+
+  const UpdateTenantFunction = new Function(stack, "UpdateTenantFunction", {
+    handler: "services/tenantManagementService/tenant-management.updateTenant",
+    runtime: "nodejs16.x",
+    timeout: 30,
+    memorySize: 512,
+    environment: {
+      ...defaultEnv,
+    },
+  });
+
+  const DeactivateTenantFunction = new Function(
+    stack,
+    "DeactivateTenantFunction",
+    {
+      handler:
+        "services/tenantManagementService/tenant-management.deactivateTenant",
       runtime: "nodejs16.x",
-      timeout: 29,
+      timeout: 30,
       memorySize: 512,
-      permissions:['appsync','events','execute-api','kinesis','lambda','rds-data','s3','secretsmanager','sns','sqs','ssm'],
-      // permissions: [authorizerExecutionRole], // todo
       environment: {
-        MONGO_URI: process.env.MONGO_URI,
+        ...defaultEnv,
       },
-      // layers: [serverlessSaaSLayers], //todo
-    });
+    }
+  );
+
+  const ActivateTenantFunction = new Function(stack, "ActivateTenantFunction", {
+    handler:
+      "services/tenantManagementService/tenant-management.activateTenant",
+    runtime: "nodejs16.x",
+    timeout: 30,
+    memorySize: 512,
+    environment: {
+      ...defaultEnv,
+    },
+  });
+
+  const CreateUserFunction = new Function(stack, "CreateUserFunction", {
+    handler: "services/tenantManagementService/user-management.createUser",
+    runtime: "nodejs16.x",
+    timeout: 30,
+    memorySize: 512,
+    environment: {
+      ...defaultEnv,
+    },
+  });
+  CreateUserFunction.attachPermissions([
+    "cognito-idp:CreateGroup", //permission
+    "cognito-idp:AdminCreateUser", //for
+    "cognito-idp:AdminAddUserToGroup", //createTenantAdminUser
+  ]);
+
+  const DisableUserFunction = new Function(stack, "DisableUserFunction", {
+    handler: "services/tenantManagementService/user-management.disableUser",
+    runtime: "nodejs16.x",
+    timeout: 30,
+    memorySize: 512,
+    environment: {
+      ...defaultEnv,
+    },
+  });
+
+  const EnableUsersByTenantFunction = new Function(
+    stack,
+    "EnableUsersByTenantFunction",
+    {
+      handler:
+        "services/tenantManagementService/user-management.enableUsersByTenant",
+      runtime: "nodejs16.x",
+      timeout: 30,
+      memorySize: 512,
+      environment: {
+        ...defaultEnv,
+      },
+    }
+  );
+
+  const DisableUsersByTenantFunction = new Function(
+    stack,
+    "DisableUsersByTenantFunction",
+    {
+      handler:
+        "services/tenantManagementService/user-management.disableUsersByTenant",
+      runtime: "nodejs16.x",
+      timeout: 30,
+      memorySize: 512,
+      environment: {
+        ...defaultEnv,
+      },
+    }
+  );
+
+  const GetUsersFunction = new Function(stack, "GetUsersFunction", {
+    handler: "services/tenantManagementService/user-management.getUsers",
+    runtime: "nodejs16.x",
+    timeout: 30,
+    memorySize: 512,
+    environment: {
+      ...defaultEnv,
+    },
+  });
+  GetUsersFunction.attachPermissions([
+    "cognito-idp:ListUsersInGroup", //list user according to tenant permission
+    "cognito-idp:ListUsers", //list user according to tenant permission
+  ]);
+
+  const GetUserFunction = new Function(stack, "GetUserFunction", {
+    handler: "services/tenantManagementService/user-management.getUser",
+    runtime: "nodejs16.x",
+    timeout: 30,
+    memorySize: 512,
+    environment: {
+      ...defaultEnv,
+    },
+  });
+  GetUserFunction.attachPermissions(["cognito-idp:ListUsersInGroup"]);
+
+  const CreateTenantAdminUserFunction = new Function(
+    stack,
+    "CreateTenantAdminUserFunction",
+    {
+      handler:
+        "services/tenantManagementService/user-management.createTenantAdminUser",
+      runtime: "nodejs16.x",
+      timeout: 30,
+      memorySize: 512,
+      environment: {
+        ...defaultEnv,
+        CREATE_TENANT_ADMIN_USER_RESOURCE_PATH: "user/tenant-admin",
+        CREATE_TENANT_RESOURCE_PATH: "tenant",
+        PROVISION_TENANT_RESOURCE_PATH: "provisioning",
+      },
+    }
+  );
+  CreateTenantAdminUserFunction.attachPermissions([
+    "cognito-idp:CreateGroup", //permission
+    "cognito-idp:AdminCreateUser", //for
+    "cognito-idp:AdminAddUserToGroup", //createTenantAdminUser
+  ]);
+  const RegisterTenantFunction = new Function(stack, "RegisterTenantFunction", {
+    handler:
+      "services/tenantManagementService/tenant-registration.registerTenant",
+    runtime: "nodejs16.x",
+    timeout: 30,
+    memorySize: 512,
+    environment: {
+      ...defaultEnv,
+      CREATE_TENANT_ADMIN_USER_RESOURCE_PATH: "user/tenant-admin",
+      CREATE_TENANT_RESOURCE_PATH: "tenant",
+      PROVISION_TENANT_RESOURCE_PATH: "provisioning",
+    },
+  });
+
+  const GetOrders = new Function(stack, "GetOrders", {
+    handler: "services/orderService/orderService.getOrders",
+    runtime: "nodejs16.x",
+    timeout: 30,
+    memorySize: 512,
+    environment: {
+      ...defaultEnv,
+    },
+  });
+
+  const GetProducts = new Function(stack, "GetProducts", {
+    handler: "services/productService/productService.getProducts",
+    runtime: "nodejs16.x",
+    timeout: 30,
+    memorySize: 512,
+    environment: {
+      ...defaultEnv,
+    },
+  });
+
+  const CreateProduct = new Function(stack, "CreateProduct", {
+    handler: "services/productService/productService.createProduct",
+    runtime: "nodejs16.x",
+    timeout: 30,
+    memorySize: 512,
+    environment: {
+      ...defaultEnv,
+    },
+  });
+  const UpdateProduct = new Function(stack, "UpdateProduct", {
+    handler: "services/productService/productService.updateProduct",
+    runtime: "nodejs16.x",
+    timeout: 30,
+    memorySize: 512,
+    environment: {
+      ...defaultEnv,
+    },
+  });
+
+  const CreateOrder = new Function(stack, "CreateOrder", {
+    handler: "services/orderService/orderService.createOrder",
+    runtime: "nodejs16.x",
+    timeout: 30,
+    memorySize: 512,
+    environment: {
+      ...defaultEnv,
+    },
+  });
+
+  const CreatePaymentIntent = new Function(stack, "CreatePaymentIntent", {
+    handler: "services/paymentService/paymentService.createPaymentIntent",
+    runtime: "nodejs16.x",
+    timeout: 30,
+    memorySize: 512,
+    environment: {
+      ...defaultEnv,
+      STRIPE_PUBLISHABLE_KEY: process.env.STRIPE_PUBLISHABLE_KEY,
+      STRIPE_SECRET_KEY: process.env.STRIPE_SECRET_KEY,
+      STRIPE_WEBHOOK_SECRET: process.env.STRIPE_WEBHOOK_SECRET,
+    },
+  });
+
+  const PaymentSuccessWebhook = new Function(stack, "PaymentSuccessWebhook", {
+    // once payment is done
+    handler: "services/paymentService/paymentService.paymentSuccessWebhook",
+    runtime: "nodejs16.x",
+    timeout: 30,
+    memorySize: 512,
+    environment: {
+      ...defaultEnv,
+      STRIPE_PUBLISHABLE_KEY: process.env.STRIPE_PUBLISHABLE_KEY,
+      STRIPE_SECRET_KEY: process.env.STRIPE_SECRET_KEY,
+      STRIPE_WEBHOOK_SECRET: process.env.STRIPE_WEBHOOK_SECRET,
+    },
   });
 
   // Cognito User Pool & Client
-//   const auth = new sst.Auth(stack, "CognitoAuth", {
-//     cognito: true,
-//     userPool: {
-//       signInAliases: { email: true },
-//     },
-//     userPoolClient: {
-//       authFlows: { userPassword: true },
-//     },
-//   });
-// const createTenantFunction = new Function(stack, "CreateTenantFunction", {
-//   handler: "services/TenantManagementService/tenant-management.create",
-//   runtime: "nodejs18.x",
-//   timeout: 30,
-//   memorySize: 512,
-//   permissions: ["dynamodb", "s3"], // Adjust as needed
-//   environment: {
-//     MONGO_URI: process.env.MONGO_URI,
-//   },
-// });
+  //   const auth = new sst.Auth(stack, "CognitoAuth", {
+  //     cognito: true,
+  //     userPool: {
+  //       signInAliases: { email: true },
+  //     },
+  //     userPoolClient: {
+  //       authFlows: { userPassword: true },
+  //     },
+  //   });
+  // const createTenantFunction = new Function(stack, "CreateTenantFunction", {
+  //   handler: "services/tenantManagementService/tenant-management.create",
+  //   runtime: "nodejs18.x",
+  //   timeout: 30,
+  //   memorySize: 512,
+  //   permissions: ["dynamodb", "s3"], // Adjust as needed
+  //   environment: {
+  //     MONGO_URI: process.env.MONGO_URI,
+  //   },
+  // });
+  const sharedAuthorizer = new Function(stack, "SharedAuthorizer", {
+    handler: "resources/sharedServiceAuthorizer.lambdaHandler",
+    environment: {
+      REGION: process.env.REGION,
+      TENANT_USER_POOL: Congito.CognitoUserPool.userPoolId,
+      TENANT_APP_CLIENT: Congito.CognitoUserPool.userPoolClientId,
+      OPERATION_USERS_USER_POOL:
+        Congito.CognitoOperationUsersUserPool.userPoolId,
+      OPERATION_USERS_APP_CLIENT:
+        Congito.CognitoOperationUsersUserPool.userPoolClientId,
+    },
+  });
 
-  const Congito= CongitoStack({stack})
+  const tenantAuthorizer = new Function(stack, "TenantAuthorizer", {
+    handler: "resources/tenantAuthorizer.lambdaHandler",
+    environment: {
+      REGION: process.env.REGION,
+      TENANT_USER_POOL: Congito.CognitoUserPool.userPoolId,
+      TENANT_APP_CLIENT: Congito.CognitoUserPool.userPoolClientId,
+      OPERATION_USERS_USER_POOL:
+        Congito.CognitoOperationUsersUserPool.userPoolId,
+      OPERATION_USERS_APP_CLIENT:
+        Congito.CognitoOperationUsersUserPool.userPoolClientId,
+    },
+  });
   const api = new Api(this, "Api", {
+    authorizers: {
+      sharedAuthorizer: {
+        type: "lambda",
+        function: sharedAuthorizer,
+        identitySources: [apigateway.IdentitySource.header("Authorization")],
+      },
+      tenantAuthorizer: {
+        type: "lambda",
+        function: tenantAuthorizer,
+        identitySources: [apigateway.IdentitySource.header("Authorization")],
+      },
+    },
+    defaults: {
+      authorizer: "tenantAuthorizer",
+    },
+    // cors: {
+    //   allowMethods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    //   allowOrigins: ["*"],
+    // },
     // defaults: {
     //   function: {
     //     // permissions: [authorizerExecutionRole], // todo
@@ -137,48 +437,106 @@ export function MyStack({stack}) {
     //   },
     // },
     routes: {
-      "POST /tenant": lambdaFunctions.CreateTenantFunction,
-      "GET /tenant/{tenantId}": lambdaFunctions.GetTenantFunction,
-      "PUT /tenant/{tenantId}": lambdaFunctions.UpdateTenantFunction,
-      "DELETE /tenant/{tenantId}": lambdaFunctions.DeactivateTenantFunction,
-      "POST /tenant/activate": lambdaFunctions.ActivateTenantFunction,
-      "POST /user": lambdaFunctions.CreateUserFunction,
-      "POST /user/disable": lambdaFunctions.DisableUserFunction,
-      "POST /users/enable": lambdaFunctions.EnableUsersByTenantFunction,
-      "POST /users/disable": lambdaFunctions.DisableUsersByTenantFunction,
-      "POST /register": lambdaFunctions.RegisterTenantFunction,
-      "GET /users": lambdaFunctions.GetUsersFunction,
-      "GET /user/{userId}": lambdaFunctions.GetUserFunction,
-      "POST /user/admin": lambdaFunctions.CreateTenantAdminUserFunction,
+      "POST /payment/createPaymentIntent": {
+        function: CreatePaymentIntent,
+        authorizer: "none",
+      },
+      "POST /payment/success-webhook": {
+        function: PaymentSuccessWebhook,
+        authorizer: "none",
+      },
 
-      "GET /products": "services/ProductService/index.handler",
-      "POST /products": "services/ProductService/index.handler",
-      "GET /orders": "services/OrderService/index.handler",
-      "POST /orders": "services/OrderService/index.handler",
+      "POST /tenant": {
+        function: CreateTenantFunction,
+        authorizer: "none",
+      },
+      "GET /tenants": {
+        function: GetTenantsFunction,
+        authorizer: "sharedAuthorizer",
+      },
+      "GET /tenant/{tenantId}": {
+        function: GetTenantFunction,
+        authorizer: "sharedAuthorizer",
+      },
+      "PUT /tenant/{tenantId}": {
+        function: UpdateTenantFunction,
+        authorizer: "sharedAuthorizer",
+      },
+      "DELETE /tenant/{tenantId}": {
+        function: DeactivateTenantFunction,
+        authorizer: "sharedAuthorizer",
+      },
+      "POST /tenant/activate": {
+        function: ActivateTenantFunction,
+        authorizer: "sharedAuthorizer",
+      },
+      "POST /user": {
+        function: CreateUserFunction,
+        authorizer: "sharedAuthorizer",
+      },
+      "POST /user/disable": {
+        function: DisableUserFunction,
+        authorizer: "sharedAuthorizer",
+      },
+      "POST /users/enable": {
+        function: EnableUsersByTenantFunction,
+        authorizer: "sharedAuthorizer",
+      },
+      "POST /users/disable": {
+        function: DisableUsersByTenantFunction,
+        authorizer: "sharedAuthorizer",
+      },
+      "POST /register": {
+        function: RegisterTenantFunction,
+        authorizer: "sharedAuthorizer",
+      },
+      "GET /users": {
+        function: GetUsersFunction,
+        authorizer: "sharedAuthorizer",
+      },
+      "GET /user/{userId}": GetUserFunction,
+      "POST /user/tenant-admin": {
+        function: CreateTenantAdminUserFunction,
+        authorizer: "none",
+      },
+
+      "GET /products": {
+        function: GetProducts,
+        authorizer: "tenantAuthorizer",
+      },
+
+      // "GET /products": lambdaFunctions.ProductFunction,
+      "POST /products/create-product": CreateProduct,
+      "PUT /products/update-product/{_id}": UpdateProduct,
+
+      // "POST /products": lambdaFunctions.ProductFunction,
+      "GET /orders": GetOrders,
+      // lambdaFunctions.OrderFunction,
+      // "POST /orders": lambdaFunctions.OrderFunction,
+      "POST /orders/create-order": CreateOrder,
     },
   });
-
-
-  // Output the API endpoint
-  stack.addOutputs({
-    ApiEndpoint: api.url,
-    CreateTenantFunctionArn:lambdaFunctions.CreateTenantFunction.functionArn,
-    GetTenantFunctionArn: lambdaFunctions.GetTenantFunction.functionArn,
-    UpdateTenantFunctionArn: lambdaFunctions.UpdateTenantFunction.functionArn,
-    DeactivateTenantFunctionArn: lambdaFunctions.DeactivateTenantFunction.functionArn,
-    ActivateTenantFunctionArn: lambdaFunctions.ActivateTenantFunction.functionArn,
-    CreateUserFunctionArn: lambdaFunctions.CreateUserFunction.functionArn,
-    DisableUserFunctionArn: lambdaFunctions.DisableUserFunction.functionArn,
-    EnableUsersByTenantFunctionArn: lambdaFunctions.EnableUsersByTenantFunction.functionArn,
-    DisableUsersByTenantFunctionArn: lambdaFunctions.DisableUsersByTenantFunction.functionArn,
-    RegisterTenantFunctionArn: lambdaFunctions.RegisterTenantFunction.functionArn,
-    GetUsersFunctionArn: lambdaFunctions.GetUsersFunction.functionArn,
-    GetUserFunctionArn: lambdaFunctions.GetUserFunction.functionArn,
-    CreateTenantAdminUserFunctionArn: lambdaFunctions.CreateTenantAdminUserFunction.functionArn,
-    // CognitoAdminUserGroupName:CognitoAddUserToGroup1.groupName
+  stack // Output the API endpoint
+    .addOutputs({
+      ApiEndpoint: api.url,
+      CreateTenantFunctionArn: CreateTenantFunction.functionArn,
+      GetTenantFunctionArn: GetTenantFunction.functionArn,
+      UpdateTenantFunctionArn: UpdateTenantFunction.functionArn,
+      DeactivateTenantFunctionArn: DeactivateTenantFunction.functionArn,
+      ActivateTenantFunctionArn: ActivateTenantFunction.functionArn,
+      CreateUserFunctionArn: CreateUserFunction.functionArn,
+      DisableUserFunctionArn: DisableUserFunction.functionArn,
+      EnableUsersByTenantFunctionArn: EnableUsersByTenantFunction.functionArn,
+      DisableUsersByTenantFunctionArn: DisableUsersByTenantFunction.functionArn,
+      RegisterTenantFunctionArn: RegisterTenantFunction.functionArn,
+      GetUsersFunctionArn: GetUsersFunction.functionArn,
+      GetUserFunctionArn: GetUserFunction.functionArn,
+      CreateTenantAdminUserFunctionArn:
+        CreateTenantAdminUserFunction.functionArn,
+      // CognitoAdminUserGroupName:CognitoAddUserToGroup1.groupName
       //   // ApiEndpoint: api.url,
-  //   // CognitoUserPoolId: auth.cognitoUserPoolId,
-  //   // CognitoUserPoolClientId: auth.cognitoUserPoolClientId,
-  //   // SharedServicesAuthorizerFunctionArn: sharedServicesAuthorizerFunction.functionArn,
-  });
+      //   // CognitoUserPoolId: auth.cognitoUserPoolId,
+      //   // CognitoUserPoolClientId: auth.cognitoUserPoolClientId,
+      //   // SharedServicesAuthorizerFunctionArn: sharedServicesAuthorizerFunction.functionArn,
+    });
 }

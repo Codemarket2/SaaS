@@ -1,9 +1,11 @@
-import mongoose from "mongoose"
-import {TenantDetails} from './tenantDetailsModel'
+import mongoose from "mongoose";
+import { TenantDetails } from "./tenantDetailsModel";
 const tenantUserMappingSchema = new mongoose.Schema({
   tenantId: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: "TenantDetails" 
+    type: String,
+    required: true,
+    // type: mongoose.Schema.Types.ObjectId, // todo may be need to keep this type but having issue so i am putting string
+    // ref: "TenantDetails"
   },
   userName: {
     type: String,
@@ -17,4 +19,7 @@ tenantUserMappingSchema.index({ tenantId: 1, userName: 1 }, { unique: true });
 // Create an additional index for the GSI on `userName` and `tenantId`
 tenantUserMappingSchema.index({ userName: 1, tenantId: 1 });
 
-export const TenantUserMapping= mongoose.model("TenantUserMapping", tenantUserMappingSchema);
+export const TenantUserMapping = mongoose.model(
+  "TenantUserMapping",
+  tenantUserMappingSchema
+);

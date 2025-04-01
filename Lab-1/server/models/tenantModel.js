@@ -10,4 +10,4 @@ const TenantSchema = new mongoose.Schema({
   isActive: { type: Boolean, default: true },
 });
 
-export const Tenant= mongoose.model("Tenant",TenantSchema)
+export const Tenant = mongoose.model("Tenant", TenantSchema);

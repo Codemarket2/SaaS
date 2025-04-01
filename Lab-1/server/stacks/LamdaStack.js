@@ -1,7 +1,7 @@
 import * as sst from "@serverless-stack/resources";
 import * as iam from "aws-cdk-lib/aws-iam";
 
-export default function LambdaStack({stack}) {
+export default function LambdaStack({ stack }) {
   const MONGO_URI = process.env.MONGO_URI;
 
   // ✅ Lambda Layer (Equivalent to ServerlessSaaSLayers)
@@ -10,60 +10,93 @@ export default function LambdaStack({stack}) {
     runtime: "nodejs18.x",
     bundle: false,
     description: "Shared utilities for logging and utils",
-    nodeModules: ["aws-sdk","winston"],
+    nodeModules: ["aws-sdk", "winston"],
   });
 
   // ✅ IAM Roles (Converted from AWS::IAM::Role)
-  const authorizerExecutionRole = new iam.Role(stack, "AuthorizerExecutionRole", {
-    assumedBy: new iam.ServicePrincipal("lambda.amazonaws.com"),
-    managedPolicies: [
-      iam.ManagedPolicy.fromAwsManagedPolicyName("CloudWatchLambdaInsightsExecutionRolePolicy"),
-      iam.ManagedPolicy.fromAwsManagedPolicyName("service-role/AWSLambdaBasicExecutionRole"),
-      iam.ManagedPolicy.fromAwsManagedPolicyName("AWSXrayWriteOnlyAccess"),
-    ],
-    inlinePolicies: {
-      AuthorizerPolicy: new iam.PolicyDocument({
-        statements: [
-          new iam.PolicyStatement({
-            actions: ["cognito-idp:List*"],
-            resources: [`arn:aws:cognito-idp:${app.region}:${app.account}:userpool/*`],
-          }),
-        ],
-      }),
-    },
-  });
+  const authorizerExecutionRole = new iam.Role(
+    stack,
+    "AuthorizerExecutionRole",
+    {
+      assumedBy: new iam.ServicePrincipal("lambda.amazonaws.com"),
+      managedPolicies: [
+        iam.ManagedPolicy.fromAwsManagedPolicyName(
+          "CloudWatchLambdaInsightsExecutionRolePolicy"
+        ),
+        iam.ManagedPolicy.fromAwsManagedPolicyName(
+          "service-role/AWSLambdaBasicExecutionRole"
+        ),
+        iam.ManagedPolicy.fromAwsManagedPolicyName("AWSXrayWriteOnlyAccess"),
+      ],
+      inlinePolicies: {
+        AuthorizerPolicy: new iam.PolicyDocument({
+          statements: [
+            new iam.PolicyStatement({
+              actions: ["cognito-idp:List*"],
+              resources: [
+                `arn:aws:cognito-idp:${app.region}:${app.account}:userpool/*`,
+              ],
+            }),
+          ],
+        }),
+      },
+    }
+  );
 
   // ✅ Shared Services Authorizer Function
-  const sharedServicesAuthorizerFunction = new sst.Function(stack, "SharedServicesAuthorizerFunction", {
-    handler: "functions/shared_service_authorizer.main",
-    runtime: "nodejs18.x",
-    timeout: 29,
-    memorySize: 256,
-    permissions: [authorizerExecutionRole], // todo
-    permissions:['*'],
-    environment: {
-      MONGO_URI,
-      OPERATION_USERS_USER_POOL: process.env.CognitoOperationUsersUserPoolId,
-      OPERATION_USERS_APP_CLIENT: process.env.CognitoOperationUsersUserPoolClientId,
-    },
-    // layers: [serverlessSaaSLayers], //todo
-  });
+  const sharedServicesAuthorizerFunction = new sst.Function(
+    stack,
+    "SharedServicesAuthorizerFunction",
+    {
+      handler: "functions/shared_service_authorizer.main",
+      runtime: "nodejs18.x",
+      timeout: 29,
+      memorySize: 256,
+      permissions: [authorizerExecutionRole], // todo
+      permissions: ["*"],
+      environment: {
+        MONGO_URI,
+        OPERATION_USERS_USER_POOL: process.env.CognitoOperationUsersUserPoolId,
+        OPERATION_USERS_APP_CLIENT:
+          process.env.CognitoOperationUsersUserPoolClientId,
+      },
+      // layers: [serverlessSaaSLayers], //todo
+    }
+  );
 
   // ✅ Define ALL Lambda Functions
   const lambdaConfigs = [
     { name: "CreateTenantFunction", handler: "functions/createTenant.main" },
     { name: "GetTenantFunction", handler: "functions/getTenant.main" },
     { name: "UpdateTenantFunction", handler: "functions/updateTenant.main" },
-    { name: "DeactivateTenantFunction", handler: "functions/deactivateTenant.main" },
-    { name: "ActivateTenantFunction", handler: "functions/activateTenant.main" },
+    {
+      name: "DeactivateTenantFunction",
+      handler: "functions/deactivateTenant.main",
+    },
+    {
+      name: "ActivateTenantFunction",
+      handler: "functions/activateTenant.main",
+    },
     { name: "CreateUserFunction", handler: "functions/createUser.main" },
     { name: "DisableUserFunction", handler: "functions/disableUser.main" },
-    { name: "EnableUsersByTenantFunction", handler: "functions/enableUsersByTenant.main" },
-    { name: "DisableUsersByTenantFunction", handler: "functions/disableUsersByTenant.main" },
-    { name: "RegisterTenantFunction", handler: "functions/registerTenant.main" },
+    {
+      name: "EnableUsersByTenantFunction",
+      handler: "functions/enableUsersByTenant.main",
+    },
+    {
+      name: "DisableUsersByTenantFunction",
+      handler: "functions/disableUsersByTenant.main",
+    },
+    {
+      name: "RegisterTenantFunction",
+      handler: "functions/registerTenant.main",
+    },
     { name: "GetUsersFunction", handler: "functions/getUsers.main" },
     { name: "GetUserFunction", handler: "functions/getUser.main" },
-    { name: "CreateTenantAdminUserFunction", handler: "functions/createTenantAdminUser.main" },
+    {
+      name: "CreateTenantAdminUserFunction",
+      handler: "functions/createTenantAdminUser.main",
+    },
   ];
 
   const lambdaFunctions = {};
@@ -77,7 +110,7 @@ export default function LambdaStack({stack}) {
       environment: {
         MONGO_URI,
       },
-    //   layers: [serverlessSaaSLayers],
+      //   layers: [serverlessSaaSLayers],
     });
   });
 
@@ -106,41 +139,48 @@ export default function LambdaStack({stack}) {
   });
 
   // ✅ Cognito User Pool & Client
-//   const auth = new sst.Auth(stack, "CognitoAuth", {
-//     cognito: true,
-//     userPool: {
-//       signInAliases: { email: true },
-//     },
-//     userPoolClient: {
-//       authFlows: { userPassword: true },
-//     },
-//   });
+  //   const auth = new sst.Auth(stack, "CognitoAuth", {
+  //     cognito: true,
+  //     userPool: {
+  //       signInAliases: { email: true },
+  //     },
+  //     userPoolClient: {
+  //       authFlows: { userPassword: true },
+  //     },
+  //   });
 
   // ✅ Outputs
   stack.addOutputs({
     // ApiEndpoint: api.url,
     // CognitoUserPoolId: auth.cognitoUserPoolId,
     // CognitoUserPoolClientId: auth.cognitoUserPoolClientId,
-    SharedServicesAuthorizerFunctionArn: sharedServicesAuthorizerFunction.functionArn,
+    SharedServicesAuthorizerFunctionArn:
+      sharedServicesAuthorizerFunction.functionArn,
     CreateTenantFunctionArn: lambdaFunctions.CreateTenantFunction.functionArn,
     GetTenantFunctionArn: lambdaFunctions.GetTenantFunction.functionArn,
     UpdateTenantFunctionArn: lambdaFunctions.UpdateTenantFunction.functionArn,
-    DeactivateTenantFunctionArn: lambdaFunctions.DeactivateTenantFunction.functionArn,
-    ActivateTenantFunctionArn: lambdaFunctions.ActivateTenantFunction.functionArn,
+    DeactivateTenantFunctionArn:
+      lambdaFunctions.DeactivateTenantFunction.functionArn,
+    ActivateTenantFunctionArn:
+      lambdaFunctions.ActivateTenantFunction.functionArn,
     CreateUserFunctionArn: lambdaFunctions.CreateUserFunction.functionArn,
     DisableUserFunctionArn: lambdaFunctions.DisableUserFunction.functionArn,
-    EnableUsersByTenantFunctionArn: lambdaFunctions.EnableUsersByTenantFunction.functionArn,
-    DisableUsersByTenantFunctionArn: lambdaFunctions.DisableUsersByTenantFunction.functionArn,
-    RegisterTenantFunctionArn: lambdaFunctions.RegisterTenantFunction.functionArn,
+    EnableUsersByTenantFunctionArn:
+      lambdaFunctions.EnableUsersByTenantFunction.functionArn,
+    DisableUsersByTenantFunctionArn:
+      lambdaFunctions.DisableUsersByTenantFunction.functionArn,
+    RegisterTenantFunctionArn:
+      lambdaFunctions.RegisterTenantFunction.functionArn,
     GetUsersFunctionArn: lambdaFunctions.GetUsersFunction.functionArn,
     GetUserFunctionArn: lambdaFunctions.GetUserFunction.functionArn,
-    CreateTenantAdminUserFunctionArn: lambdaFunctions.CreateTenantAdminUserFunction.functionArn,
+    CreateTenantAdminUserFunctionArn:
+      lambdaFunctions.CreateTenantAdminUserFunction.functionArn,
   });
 
-  return { 
-    lambdaFunctions, 
+  return {
+    lambdaFunctions,
     // api,
     //  auth,
     //  sharedServicesAuthorizerFunction
-     };
+  };
 }

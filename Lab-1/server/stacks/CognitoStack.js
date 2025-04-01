@@ -1,5 +1,5 @@
 import "dotenv/config";
-import { Api,Cognito } from "sst/constructs";
+import { Api, Cognito } from "sst/constructs";
 // import { setMaxListeners } from "events";
 import {
   StringAttribute,
@@ -14,10 +14,7 @@ import {
 } from "aws-cdk-lib/aws-cognito";
 import * as ssm from "aws-cdk-lib/aws-ssm";
 
-
-
-export function CongitoStack({stack}) {
-
+export function CongitoStack({ stack }) {
   const adminEmail = ssm.StringParameter.valueForStringParameter(
     stack,
     "/admin/email"
@@ -31,10 +28,10 @@ export function CongitoStack({stack}) {
     "/admin/callbackURL"
   );
   const CognitoUserPool = new Cognito(stack, "CognitoUserPool", {
-    login: ["email"],
+    login: ["username"],
     cdk: {
       userPool: {
-        userPoolName: "PooledTenant-ServerlessSaaSUserPool",
+        userPoolName: `PooledTenant-ServerlessSaaSUserPool ${stack.stage}`,
         selfSignUpEnabled: true,
         accountRecovery: AccountRecovery.EMAIL_ONLY,
         userVerification: {
@@ -43,12 +40,12 @@ export function CongitoStack({stack}) {
           emailSubject: "Your temporary password for tenant UI application",
           emailStyle: VerificationEmailStyle.CODE,
         },
-        signInAliases: { email: true },
+        signInAliases: { email: false, username: true },
         autoVerify: { email: true },
         standardAttributes: { email: { required: true, mutable: true } },
         customAttributes: {
           tenantId: new StringAttribute(),
-          userRole: new StringAttribute({ mutable: true }),
+          userRole: new StringAttribute({ mutable: true, required: false }),
         },
       },
       userPoolClient: {
@@ -61,20 +58,28 @@ export function CongitoStack({stack}) {
         oAuth: {
           scopes: [OAuthScope.EMAIL, OAuthScope.OPENID, OAuthScope.PROFILE],
           callbackUrls: ["http://localhost:5173"],
-          defaultRedirectUri: "http://localhost:5173",
+          // defaultRedirectUri: "http://localhost:5173",
           flows: { authorizationCodeGrant: true, implicitCodeGrant: true },
           logoutUrls: ["http://localhost:5173"],
         },
-        // writeAttributes: [
-        //   "email".
-        // ]
+        writeAttributes: new ClientAttributes()
+          .withStandardAttributes({
+            email: true,
+          })
+          .withCustomAttributes("custom:tenantId", "custom:userRole"),
+        readAttributes: new ClientAttributes()
+          .withStandardAttributes({
+            email: true,
+            phoneNumber: true,
+          })
+          .withCustomAttributes("custom:userRole", "custom:tenantId"),
       },
     },
   });
 
   CognitoUserPool.cdk.userPool.addDomain("CognitoUserPoolDomain", {
     cognitoDomain: {
-      domainPrefix: `pooledtenant-serverlesssaas-${stack.account}`,
+      domainPrefix: `pooledtenant-serverlesssaas-${stack.stage}`,
     },
   });
 
@@ -100,8 +105,8 @@ export function CongitoStack({stack}) {
 
       cdk: {
         userPool: {
-          userPoolName: "OperationUsers-ServerlessSaaSUserPool",
-          selfSignUpEnabled: true,
+          userPoolName: `OperationUsers-ServerlessSaaSUserPool-${stack.stage}`,
+          selfSignUpEnabled: false,
           accountRecovery: AccountRecovery.EMAIL_ONLY,
           autoVerify: { email: true },
           standardAttributes: {
@@ -140,10 +145,10 @@ export function CongitoStack({stack}) {
   );
 
   CognitoOperationUsersUserPool.cdk.userPool?.addDomain(
-    "CognitoOperationUsersUserPoolDomain",
+    `CognitoOperationUsersUserPoolDomain-${stack.stage}-${stack.account}`,
     {
       cognitoDomain: {
-        domainPrefix: `operationsusers-serverlesssaas-${stack.account}`,
+        domainPrefix: `operationsusers-serverlesssaas-${stack.account}-${stack.stage}`,
       },
     }
   );
@@ -179,22 +184,25 @@ export function CongitoStack({stack}) {
       },
     ],
   });
-  // const CognitoAddUserToGroup1=new CfnUserPoolUserToGroupAttachment(stack,'UserPoolUserToGroupAttachment',{
-  //   userPoolId:CognitoOperationUsersUserPool.userPoolId,
-  //   username:CognitoAdminUser.username||"admin",
-  //   groupName:CognitoAdminUserGroup.groupName||"SystemAdmins",
-
-  // })
+  const CognitoAddUserToGroup1 = new CfnUserPoolUserToGroupAttachment(
+    stack,
+    "UserPoolUserToGroupAttachment",
+    {
+      userPoolId: CognitoOperationUsersUserPool.userPoolId,
+      username: CognitoAdminUser.username || "admin",
+      groupName: CognitoAdminUserGroup.groupName || "SystemAdmins",
+    }
+  );
   const userPoolProviderUrl = `https://cognito-idp.us-east-1.amazonaws.com/${CognitoOperationUsersUserPool.userPoolId}`;
 
-
   stack.addOutputs({
-    CognitoUserPoolId: CognitoUserPool.userPoolClientId,
+    CognitoUserPoolId: CognitoUserPool.userPoolId,
     CognitoUserPoolClientId: CognitoUserPool.userPoolClientId,
     CognitoOperationUsersUserPoolId: CognitoOperationUsersUserPool.userPoolId,
     CognitoOperationUsersUserPoolClientId:
       CognitoOperationUsersUserPool.userPoolClientId,
     CognitoOperationUsersUserPoolProviderURL: userPoolProviderUrl,
+    CognitoAdminUserGroupName: CognitoAddUserToGroup1.groupName,
   });
   return {
     CognitoUserPool,

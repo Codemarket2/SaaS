@@ -1,7 +1,7 @@
 // OrderService Lambda Function
 import mongoose from "mongoose";
 import { DB } from "../../utils/DB";
-import { Product } from "../ProductService/index";
+import { Product } from "../productService/index";
 
 const orderSchema = new mongoose.Schema({
   orderName: String,

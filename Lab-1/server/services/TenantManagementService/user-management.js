@@ -1,26 +1,27 @@
 import AWS from "aws-sdk";
-import {
-  // CognitoIdentityProviderClient,
-  // AdminCreateUserCommand,
-  // ListUsersCommand,
-  // AdminUpdateUserAttributesCommand,
-  // AdminDisableUserCommand,
-  // AdminEnableUserCommand,
-  // AdminGetUserCommand,
-  // CreateGroupCommand,
-  // AdminAddUserToGroupCommand
-} from "@aws-sdk/signature-v4";
+// import // CognitoIdentityProviderClient,
+// AdminCreateUserCommand,
+// ListUsersCommand,
+// AdminUpdateUserAttributesCommand,
+// AdminDisableUserCommand,
+// AdminEnableUserCommand,
+// AdminGetUserCommand,
+// CreateGroupCommand,
+// AdminAddUserToGroupCommand
+// "@aws-sdk/signature-v4";
 // client-cognito-identity-provider
 import {
   createSuccessResponse,
+  DB,
   generateResponse,
   logger,
 } from "../../utils";
 import { TenantUserMapping } from "../../models";
+import { isSystemAdmin, isTenantAdmin } from "../../layers/nodejs/authManager";
 
 const cognito = new AWS.CognitoIdentityServiceProvider();
-const userPoolId = process.env.TENANT_USER_POOL_ID;
-const appClientId = process.env.TENANT_APP_CLIENT_ID;
+const userPoolId = process.env.TENANT_USER_POOL;
+const appClientId = process.env.TENANT_APP_CLIENT;
 
 // const tenantUserMappingSchema = new mongoose.Schema({
 //   tenantId: { type: String, required: true },
@@ -39,25 +40,40 @@ const client = new AWS.CognitoIdentityServiceProvider();
 export async function createTenantAdminUser(event) {
   try {
     logger.info(event);
-    const appClientId = process.env.TENANT_APP_CLIENT_ID;
+    const appClientId = process.env.TENANT_APP_CLIENT;
     const tenantDetails = JSON.parse(event.body);
     const tenantId = tenantDetails.tenantId;
-    
+
     logger.info(tenantDetails);
 
     const userMgmt = new UserManagement();
-    const tenantUserGroupResponse = await userMgmt.createUserGroup(userPoolId, tenantId, `User group for tenant ${tenantId}`);
+    const tenantUserGroupResponse = await userMgmt.createUserGroup(
+      userPoolId,
+      tenantId,
+      `User group for tenant ${tenantId}`
+    );
 
     const tenantAdminUserName = `tenant-admin-${tenantDetails.tenantId}`;
-    await userMgmt.createTenantAdmin(userPoolId, tenantAdminUserName, tenantDetails);
-    await userMgmt.addUserToGroup(userPoolId, tenantAdminUserName, tenantUserGroupResponse.Group.GroupName);
+    await userMgmt.createTenantAdmin(
+      userPoolId,
+      tenantAdminUserName,
+      tenantDetails
+    );
+    await userMgmt.addUserToGroup(
+      userPoolId,
+      tenantAdminUserName,
+      tenantUserGroupResponse.Group.GroupName
+    );
     await userMgmt.createUserTenantMapping(tenantAdminUserName, tenantId);
 
     const response = { userPoolId, appClientId, tenantAdminUserName };
     return createSuccessResponse(response);
   } catch (err) {
     logger.error(err);
-    return generateResponse({ error: "Error creating tenant admin user" }, 500);
+    return generateResponse(
+      { error: err.message ?? "Error creating tenant admin user" },
+      500
+    );
   }
 }
 
@@ -68,17 +84,19 @@ export async function createUser(event) {
 
     const tenantId = userDetails.tenantId;
 
-    const response = await client.adminCreateUser({
-      Username: userDetails.userName,
-      UserPoolId: userPoolId,
-      ForceAliasCreation: true,
-      UserAttributes: [
-        { Name: "email", Value: userDetails.userEmail },
-        { Name: "email_verified", Value: "true" },
-        { Name: "custom:userRole", Value: userDetails.userRole },
-        { Name: "custom:tenantId", Value: tenantId },
-      ],
-    }).promise();
+    const response = await client
+      .adminCreateUser({
+        Username: userDetails.userName,
+        UserPoolId: userPoolId,
+        ForceAliasCreation: true,
+        UserAttributes: [
+          { Name: "email", Value: userDetails.userEmail },
+          { Name: "email_verified", Value: "true" },
+          { Name: "custom:userRole", Value: userDetails.userRole },
+          { Name: "custom:tenantId", Value: tenantId },
+        ],
+      })
+      .promise();
 
     logger.info(response);
     const userMgmt = new UserManagement();
@@ -93,27 +111,41 @@ export async function createUser(event) {
   }
 }
 
-export async function getUsers() {
+export async function getUsers(event) {
   try {
     logger.info("Request received to get users");
-    const response = await client.listUsers({ UserPoolId: userPoolId }).promise();
-
-    const users = response.Users.map(user => {
-      const userInfo = new UserInfo();
-      user.Attributes.forEach(attr => {
-        if (attr.Name === "custom:tenantId") userInfo.tenantId = attr.Value;
-        if (attr.Name === "custom:userRole") userInfo.userRole = attr.Value;
-        if (attr.Name === "email") userInfo.email = attr.Value;
+    let response;
+    const userRole = event.requestContext.authorizer?.lambda?.userRole;
+    if (isSystemAdmin(userRole) || isTenantAdmin(userRole)) {
+      const tenantId = event.requestContext.authorizer?.lambda?.tenantId;
+      if (isTenantAdmin(userRole)) {
+        response = await client
+          .listUsersInGroup({
+            UserPoolId: userPoolId,
+            GroupName: tenantId,
+          })
+          .promise();
+      } else {
+        response = await client.listUsers({ UserPoolId: userPoolId }).promise();
+      }
+      const users = response.Users.map((user) => {
+        const userInfo = new UserInfo();
+        user.Attributes.forEach((attr) => {
+          if (attr.Name === "custom:tenantId") userInfo.tenantId = attr.Value;
+          if (attr.Name === "custom:userRole") userInfo.userRole = attr.Value;
+          if (attr.Name === "email") userInfo.email = attr.Value;
+        });
+        userInfo.enabled = user.Enabled;
+        userInfo.created = user.UserCreateDate;
+        userInfo.modified = user.UserLastModifiedDate;
+        userInfo.status = user.UserStatus;
+        userInfo.userName = user.Username;
+        return userInfo;
       });
-      userInfo.enabled = user.Enabled;
-      userInfo.created = user.UserCreateDate;
-      userInfo.modified = user.UserLastModifiedDate;
-      userInfo.status = user.UserStatus;
-      userInfo.userName = user.Username;
-      return userInfo;
-    });
-
-    return generateResponse(users);
+      return generateResponse(users);
+    } else {
+      return generateResponse({ error: "Unauthorized" });
+    }
   } catch (err) {
     logger.error(err);
     return generateResponse({ error: "Error fetching users" }, 500);
@@ -141,14 +173,16 @@ export async function updateUser(event) {
 
     logger.info("Request received to update user");
 
-    await client.adminUpdateUserAttributes({
-      Username: userName,
-      UserPoolId: userPoolId,
-      UserAttributes: [
-        { Name: "email", Value: userDetails.userEmail },
-        { Name: "custom:userRole", Value: userDetails.userRole },
-      ],
-    }).promise();
+    await client
+      .adminUpdateUserAttributes({
+        Username: userName,
+        UserPoolId: userPoolId,
+        UserAttributes: [
+          { Name: "email", Value: userDetails.userEmail },
+          { Name: "custom:userRole", Value: userDetails.userRole },
+        ],
+      })
+      .promise();
 
     logger.info("Request completed to update user");
     return createSuccessResponse("User updated");
@@ -163,10 +197,12 @@ export async function disableUser(event) {
     const userName = event.pathParameters.username;
     logger.info("Request received to disable user");
 
-    await client.adminDisableUser({
-      Username: userName,
-      UserPoolId: userPoolId,
-    }).promise();
+    await client
+      .adminDisableUser({
+        Username: userName,
+        UserPoolId: userPoolId,
+      })
+      .promise();
 
     logger.info("Request completed to disable user");
     return createSuccessResponse("User disabled");
@@ -184,10 +220,12 @@ export async function disableUsersByTenant(event) {
     const users = await TenantUserMapping.find({ tenantId: tenantIdToUpdate });
 
     for (const user of users) {
-      await client.adminDisableUser({
-        Username: user.userName,
-        UserPoolId: userPoolId,
-      }).promise();
+      await client
+        .adminDisableUser({
+          Username: user.userName,
+          UserPoolId: userPoolId,
+        })
+        .promise();
     }
 
     logger.info("Request completed to disable users");
@@ -206,10 +244,12 @@ export async function enableUsersByTenant(event) {
     const users = await TenantUserMapping.find({ tenantId: tenantIdToUpdate });
 
     for (const user of users) {
-      await client.adminEnableUser({
-        Username: user.userName,
-        UserPoolId: userPoolId,
-      }).promise();
+      await client
+        .adminEnableUser({
+          Username: user.userName,
+          UserPoolId: userPoolId,
+        })
+        .promise();
     }
 
     logger.info("Request completed to enable users");
@@ -221,14 +261,16 @@ export async function enableUsersByTenant(event) {
 }
 
 async function getUserInfo(userPoolId, userName) {
-  const response = await client.adminGetUser({
-    UserPoolId: userPoolId,
-    Username: userName,
-  }).promise();
+  const response = await client
+    .adminGetUser({
+      UserPoolId: userPoolId,
+      Username: userName,
+    })
+    .promise();
 
   const userInfo = new UserInfo();
   userInfo.userName = response.Username;
-  response.UserAttributes.forEach(attr => {
+  response.UserAttributes.forEach((attr) => {
     if (attr.Name === "custom:tenantId") userInfo.tenantId = attr.Value;
     if (attr.Name === "custom:userRole") userInfo.userRole = attr.Value;
     if (attr.Name === "email") userInfo.email = attr.Value;
@@ -239,44 +281,60 @@ async function getUserInfo(userPoolId, userName) {
 
 class UserManagement {
   async createUserGroup(userPoolId, groupName, groupDescription) {
-    return await client.createGroup({
-      GroupName: groupName,
-      UserPoolId: userPoolId,
-      Description: groupDescription,
-      Precedence: 0,
-    }).promise();
+    return await client
+      .createGroup({
+        GroupName: groupName,
+        UserPoolId: userPoolId,
+        Description: groupDescription,
+        Precedence: 0,
+      })
+      .promise();
   }
 
   async createTenantAdmin(userPoolId, tenantAdminUserName, userDetails) {
-    return await client.adminCreateUser({
-      Username: tenantAdminUserName,
-      UserPoolId: userPoolId,
-      ForceAliasCreation: true,
-      UserAttributes: [
-        { Name: "email", Value: userDetails.tenantEmail },
-        { Name: "email_verified", Value: "true" },
-        { Name: "custom:userRole", Value: "TenantAdmin" },
-        { Name: "custom:tenantId", Value: userDetails.tenantId },
-      ],
-    }).promise();
+    return await client
+      .adminCreateUser({
+        Username: tenantAdminUserName,
+        UserPoolId: userPoolId,
+        ForceAliasCreation: true,
+        UserAttributes: [
+          { Name: "email", Value: userDetails.tenantEmail },
+          { Name: "email_verified", Value: "true" },
+          { Name: "custom:userRole", Value: "TenantAdmin" },
+          { Name: "custom:tenantId", Value: userDetails.tenantId },
+        ],
+      })
+      .promise();
   }
 
   async addUserToGroup(userPoolId, userName, groupName) {
-    return await client.adminAddUserToGroup({
-      UserPoolId: userPoolId,
-      Username: userName,
-      GroupName: groupName,
-    }).promise();
+    return await client
+      .adminAddUserToGroup({
+        UserPoolId: userPoolId,
+        Username: userName,
+        GroupName: groupName,
+      })
+      .promise();
   }
 
   async createUserTenantMapping(userName, tenantId) {
+    await DB();
     const mapping = new TenantUserMapping({ tenantId, userName });
     return await mapping.save();
   }
 }
 
 class UserInfo {
-  constructor(userName = null, tenantId = null, userRole = null, email = null, status = null, enabled = null, created = null, modified = null) {
+  constructor(
+    userName = null,
+    tenantId = null,
+    userRole = null,
+    email = null,
+    status = null,
+    enabled = null,
+    created = null,
+    modified = null
+  ) {
     this.userName = userName;
     this.tenantId = tenantId;
     this.userRole = userRole;

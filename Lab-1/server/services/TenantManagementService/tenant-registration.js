@@ -2,9 +2,13 @@ import mongoose from "mongoose";
 import { v4 as uuidv4 } from "uuid";
 import axios from "axios";
 import logger from "../../layers/nodejs/logger";
-import {createErrorResponse,createSuccessResponse,getAuth, getHeaders} from "../../layers/nodejs/utils";
-import {TenantDetails,TenantUserMapping} from '../../models'
-
+import {
+  createErrorResponse,
+  createSuccessResponse,
+  getAuth,
+  getHeaders,
+} from "../../layers/nodejs/utils";
+import { TenantDetails, TenantUserMapping } from "../../models";
 
 // const TenantSchema = new mongoose.Schema({
 //   tenantId: { type: String, unique: true, required: true },
@@ -13,6 +17,7 @@ import {TenantDetails,TenantUserMapping} from '../../models'
 // });
 
 // const Tenant = mongoose.model("Tenant", TenantDetails);
+const region = process.env.REGION;
 
 export async function registerTenant(event) {
   try {
@@ -21,41 +26,99 @@ export async function registerTenant(event) {
     tenantDetails.tenantId = tenantId;
     logger.info(tenantDetails);
     const stageName = event.requestContext.stage;
-    const host = event.headers.Host;
-    const auth = getAuth(host,process.env.REGION); // todo (check about the region)
-    const headers = getHeaders(event); // todo
-    const createUserResponse = await createTenantAdminUser(tenantDetails, headers, auth, host, stageName);
+    const host = event.headers.host;
+    //Get the authorization function
+    // const authFunction = await getAuth(host, region);
+    // Get the signed request with authorization headers
+    // const auth = await authFunction(event);
+    let auth = "";
+    const headers = await getHeaders(event); // todo
+    const createUserResponse = await createTenantAdminUser(
+      tenantDetails,
+      headers,
+      auth,
+      host,
+      stageName
+    );
     logger.info(createUserResponse);
-    tenantDetails.tenantAdminUserName = createUserResponse.message.tenantAdminUserName;
-    const createTenantResponse = await createTenant(tenantDetails, headers, auth, host, stageName);
+    tenantDetails.tenantAdminUserName =
+      createUserResponse.message.tenantAdminUserName;
+    const createTenantResponse = await createTenant(
+      tenantDetails,
+      headers,
+      auth,
+      host,
+      stageName
+    );
     logger.info(createTenantResponse);
-    await TenantDetails.create(tenantDetails);
+    // await TenantDetails.create(tenantDetails);
     return createSuccessResponse("You have been registered in our system");
   } catch (error) {
+    console.log("Error", error);
     logger.error("Error registering a new tenant", error);
     throw new Error("Error registering a new tenant");
   }
 }
 
-async function createTenantAdminUser(tenantDetails, headers, auth, host, stageName) {
+async function createTenantAdminUser(
+  tenantDetails,
+  headers,
+  auth,
+  host,
+  stageName
+) {
   try {
-    const url = `https://${host}/${stageName}${process.env.CREATE_TENANT_ADMIN_USER_RESOURCE_PATH}`;
+    const url = `https://${host}/${process.env.CREATE_TENANT_ADMIN_USER_RESOURCE_PATH}`;
     logger.info(url);
-    const response = await axios.post(url, tenantDetails, { headers, auth });
+    const authHeader = await getAuth(url, region);
+    let config = {
+      method: "post",
+      maxBodyLength: Infinity,
+      url,
+      headers: {
+        ...authHeader,
+        "Content-Type": "application/json",
+      },
+      data: tenantDetails,
+    };
+    const response = await axios.request(config);
     return response.data;
   } catch (error) {
-    logger.error("Error occurred while calling the create tenant admin user service", error);
-    throw new Error("Error occurred while calling the create tenant admin user service");
+    console.log("createTenantAdminUser", error);
+    logger.error(
+      "Error occurred while calling the create tenant admin user service",
+      error
+    );
+    throw new Error(
+      "Error occurred while calling the create tenant admin user service"
+    );
   }
 }
 
 async function createTenant(tenantDetails, headers, auth, host, stageName) {
   try {
-    const url = `https://${host}/${stageName}${process.env.CREATE_TENANT_RESOURCE_PATH}`;
-    const response = await axios.post(url, tenantDetails, { headers, auth });
+    const url = `https://${host}/${process.env.CREATE_TENANT_RESOURCE_PATH}`;
+    const authHeader = await getAuth(url, region);
+
+    let config = {
+      method: "post",
+      maxBodyLength: Infinity,
+      url,
+      headers: {
+        ...authHeader,
+        "Content-Type": "application/json",
+      },
+      data: tenantDetails,
+    };
+    const response = await axios.request(config);
+    // const response = await axios.post(url, tenantDetails, { headers, auth }); // was not working
     return response.data;
   } catch (error) {
-    logger.error("Error occurred while creating the tenant record in table", error);
+    console.log("createTenant", error);
+    logger.error(
+      "Error occurred while creating the tenant record in table",
+      error
+    );
     throw new Error("Error occurred while creating the tenant record in table");
   }
 }
